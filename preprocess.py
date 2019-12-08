@@ -25,6 +25,8 @@ def coefs_fourier(X_t: np.ndarray):
 	'''
 	return np.fft.fftn(X_t)
 
+def inverse_fourier(C_t: np.ndarray):
+	return np.fft.ifftn(C_t)
 
 def coefs_wavelet(X_t: np.ndarray, wavelet: pywt.Wavelet):
 	'''
@@ -32,11 +34,17 @@ def coefs_wavelet(X_t: np.ndarray, wavelet: pywt.Wavelet):
 	X_t: sample at a particular time
 	wavelet: pywt.Wavelet()
 	'''
-	if len(X.shape) > 2:
+	if len(X_t.shape) > 2:
 		# TODO
 		raise Exception('Cant process more than 1D samples').
 	cA, (cH, cV, cD) = pywt.dwt2(X_t, wavelet, mode='smooth')
 	return np.block([[cA, cH], [cV, cD]])
+
+def inverse_wavelet(C_t: np.ndarray, wavelet: pywt.Wavelet):
+	(m, n) = C_t.shape
+	h, v = int(m/2), int(n/2)
+	cA, cH, cV, cD = C_t[:h, :v], C_t[:h, v:], C_t[h:, :v], C_t[h:, v:]		
+	return pywt.idwt2((cA, (cH, cV, cD)), wavelet, mode='smooth')
 
 class TimeSeriesDataset(Dataset):
 	def __init__(self, X: np.ndarray, coefs_fn, block_size=None, n_samples=None, device=torch.device("cpu")):
@@ -65,8 +73,10 @@ class TimeSeriesDataset(Dataset):
 		return self.n_samples
 
 	def __getitem__(self, idx):
-		X = torch.from_numpy(self.samples[idx]).to(device)
-		C = torch.from_numpy(self.samples_C[idx]).to(device)
+		X = torch.from_numpy(self.samples[idx]).to(self.device)
+		C = torch.from_numpy(self.samples_C[idx]).to(self.device)
 		return X, C
 
-
+	@property
+	def coefs_shape(self):
+		return self.samples_C[0].shape
