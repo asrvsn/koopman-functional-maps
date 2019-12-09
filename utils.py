@@ -9,4 +9,4 @@ def plot_images(d: dict):
 		ax.set_xticks([])
 		ax.set_yticks([])
 	fig.tight_layout()
-	plt.show()
+	return fig

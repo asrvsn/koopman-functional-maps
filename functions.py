@@ -1,6 +1,9 @@
 import torch
 
 def gaussian_kernel(x, y, sigma=None, der=None):
+	'''
+	x and y must be same dimensions.
+	'''
 	if sigma is None:
 		sigma = 1.0 / x.shape[0]
 	u = torch.exp(-torch.pow(torch.norm(x-y, p=2), 2) / (sigma ** 2))
@@ -11,19 +14,25 @@ def gaussian_kernel(x, y, sigma=None, der=None):
 		return u 
 
 def poly_kernel(x, y, degree=3, gamma=None, coef0=1, der=None):
+	'''
+	x and y must be same dimensions.
+	'''
 	if gamma is None:
 		gamma = 1.0 / x.shape[0]
 	if der == 'x':
-		return degree*gamma*y*torch.pow(gamma*torch.matmul(x, y) + coef0, degree-1)
+		return degree*gamma*y*torch.pow(gamma*torch.matmul(x.t(), y) + coef0, degree-1)
 	elif der == 'y':
-		return degree*gamma*x*torch.pow(gamma*torch.matmul(x, y) + coef0, degree-1)
+		return degree*gamma*x*torch.pow(gamma*torch.matmul(x.t(), y) + coef0, degree-1)
 	else:
-		return torch.pow(gamma * torch.matmul(x, y) + coef0, degree)
+		return torch.pow(gamma * torch.matmul(x.t(), y) + coef0, degree)
 
 def linear_kernel(x, y, der=None):
+	'''
+	x and y must be same dimensions.
+	'''
 	if der == 'x':
 		return y
 	elif der == 'y':
 		return x
 	else:
-		return torch.matmul(x, y)
+		return torch.matmul(x.t(), y)
