@@ -16,22 +16,30 @@ X = sinusoid_dataset(10000, 20)
 print('==> Preparing data..')
 coefs_fn = lambda X_t: coefs_wavelet(X_t, pywt.Wavelet('haar'))
 inverse_fn = lambda C_t: inverse_wavelet(C_t, pywt.Wavelet('haar'))
-dataset = TimeSeriesDataset(X, coefs_fn, device=device, normalize=True)
+train_set = TimeSeriesDataset(X, coefs_fn, device=device, normalize=True, n_samples=100)
+test_set = TimeSeriesDataset(X, coefs_fn, device=device, normalize=True, n_samples=10)
 
-print('==> Learning..')
-c_shape = dataset.coefs_shape
-n = len(dataset)
+c_shape = train_set.coefs_shape
+x_shape = train_set.input_shape
+n = len(train_set)
 lr = 0.01
 mom = 0.9
-ker = lambda X, Y: linear_kernel(X, Y)
-ker_dx = lambda X, Y: linear_kernel(X, Y, der='x')
-ker_dy = lambda X, Y: linear_kernel(X, Y, der='y')
+
+gaussian_kernel = RFFKernel(x_shape[1], D=200, metric='rbf', device=device)
+laplace_kernel = RFFKernel(x_shape[1], D=50, metric='laplace', device=device)
+
+ker = lambda X, Y: torch.matmul(X.t(), Y)
+
+def loss_fn(K, C0, C1):
+	KC0 = torch.matmul(K, C0)
+	loss = torch.trace(ker(KC0, KC0)) - torch.trace(2*ker(KC0, C1)) + torch.trace(ker(C1, C1))
+	return loss
 
 def train(epoch, K, prev_grad):
 	print('\nEpoch: %d' % epoch)
 	grad = 0
 	loss = 0
-	for (_, C) in dataset:
+	for (_, C) in train_set:
 		C0, C1 = C[0], C[1]
 		e0 = torch.matmul(K, C0)
 		e11 = ker_dy(e0, e0)
@@ -51,15 +59,15 @@ def train2(epoch, K, optimizer):
 	print('\nEpoch: %d' % epoch)
 	optimizer.zero_grad()
 	loss = 0
-	for (_, C) in dataset:
+	for (_, C) in train_set:
 		C0, C1 = C[0], C[1]
-		loss += torch.pow(torch.norm(torch.matmul(K, C0) - C1, p='fro'), 2)
+		loss += loss_fn(K, C0, C1)
 	loss /= n
 	loss.backward()
 	optimizer.step()
 	return loss.item()
 
-def pred(K, i):
+def pred(K, i, dataset):
 	with torch.no_grad():
 		(X, C) = dataset[i]
 		[X0, X1] = X
@@ -73,8 +81,23 @@ def pred(K, i):
 		}
 		return plot_images(result)
 
-def run():
-	epochs = 100
+def test(K):
+	with torch.no_grad():
+		loss = 0
+		for (X, C) in test_set:
+			X0, X1 = X[0], X[1]
+			C0, C1 = C[0], C[1]
+			KC0 = torch.matmul(K, C0)
+			KX0 = inverse_fn(KC0.cpu().numpy())
+			KX0 = torch.from_numpy(KX0).to(device)
+			loss += torch.norm(X1 - KX0, p='fro').item()
+		loss /= len(test_set)
+		print(f'Test loss: {loss}')
+		return loss
+
+def run(early_stop=True):
+	print('==> Learning..')
+	epochs = 1000
 	K = torch.randn(c_shape[0], c_shape[0]).double().to(device)
 	K = Variable(K, requires_grad=True)
 
@@ -83,16 +106,22 @@ def run():
 	prev_grad = 0
 	prev_loss = float('inf')
 	loss_history = []
-	for epoch in range(epochs):
-		loss = train2(epoch, K, optimizer)
-		print('\nLoss: %d' % loss)
-		loss_history.append(loss)
-		if np.abs(prev_loss - loss) < 1e-3:
-			break
-		prev_loss = loss
 
-	i = 10
-	f1 = pred(K, i)
+	try: 
+		for epoch in range(epochs):
+			loss = train2(epoch, K, optimizer)
+			print(f'Loss: {loss}')
+			if early_stop and np.abs(prev_loss - loss) < 1e-3:
+				break
+			loss_history.append(loss)
+			prev_loss = loss
+	except KeyboardInterrupt:
+		print('Quitting training early.')
+
+	print('==> Testing..')
+	test_loss = test(K)
+
+	f1 = pred(K, random.randint(0, len(test_set)-1), test_set)
 	f2 = plt.figure(2)
 	plt.plot(np.arange(len(loss_history)), loss_history)
 	f3 = plt.figure(3)
@@ -101,4 +130,4 @@ def run():
 	plt.show()
 
 if __name__ == '__main__':
-	run()
+	run(early_stop=False)
