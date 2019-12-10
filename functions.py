@@ -5,6 +5,7 @@ import numpy as np
 class RFFKernel:
 	'''
 	Random Fourier features implementation of Gaussian/Laplacian kernel.
+	transcribed from https://github.com/hichamjanati/srf
 	'''
 	def __init__(self, d, gamma=1, D=50, metric='rbf', device=torch.device('cpu')):
 		'''

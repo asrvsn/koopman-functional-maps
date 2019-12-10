@@ -11,7 +11,8 @@ from utils import *
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-X = sinusoid_dataset(10000, 20)
+# X = sinusoid(10000, 20)
+X = duffing(10000, 5, 50)
 
 print('==> Preparing data..')
 coefs_fn = lambda X_t: coefs_wavelet(X_t, pywt.Wavelet('haar'))
@@ -28,12 +29,13 @@ mom = 0.9
 gaussian_kernel = RFFKernel(x_shape[1], D=200, metric='rbf', device=device)
 laplace_kernel = RFFKernel(x_shape[1], D=50, metric='laplace', device=device)
 
-ker = lambda X, Y: torch.matmul(X.t(), Y)
+# fmap = gaussian_kernel
+fmap = lambda x: x
 
 def loss_fn(K, C0, C1):
-	KC0 = torch.matmul(K, C0)
-	loss = torch.trace(ker(KC0, KC0)) - torch.trace(2*ker(KC0, C1)) + torch.trace(ker(C1, C1))
-	return loss
+	return torch.pow(torch.norm(fmap(torch.matmul(K, C0)) - fmap(C1), p='fro'), 2)
+	# KC0 = torch.matmul(K, C0)
+	# return torch.trace(ker(KC0, KC0)) - torch.trace(2*ker(KC0, C1)) + torch.trace(ker(C1, C1))
 
 def train(epoch, K, prev_grad):
 	print('\nEpoch: %d' % epoch)
@@ -59,8 +61,9 @@ def train2(epoch, K, optimizer):
 	print('\nEpoch: %d' % epoch)
 	optimizer.zero_grad()
 	loss = 0
-	for (_, C) in train_set:
+	for (X, C) in train_set:
 		C0, C1 = C[0], C[1]
+		X0, X1 = X[0], X[1]
 		loss += loss_fn(K, C0, C1)
 	loss /= n
 	loss.backward()
@@ -95,26 +98,36 @@ def test(K):
 		print(f'Test loss: {loss}')
 		return loss
 
+def vis(X, K, n=1000):
+	fig = plt.figure()
+	for i in range(n):
+		X_t = X[i:i+X.shape[1]]
+		C_t = coefs_fn(X_t)
+		KC = np.dot(K, C_t)
+		X_pred = inverse_fn(KC)
+		
+
 def run(early_stop=True):
 	print('==> Learning..')
-	epochs = 1000
 	K = torch.randn(c_shape[0], c_shape[0]).double().to(device)
 	K = Variable(K, requires_grad=True)
 
 	optimizer = optim.SGD([K], lr=lr, momentum=mom)
 
+	epoch = 0
 	prev_grad = 0
 	prev_loss = float('inf')
 	loss_history = []
 
 	try: 
-		for epoch in range(epochs):
+		while True:
 			loss = train2(epoch, K, optimizer)
 			print(f'Loss: {loss}')
 			if early_stop and np.abs(prev_loss - loss) < 1e-3:
 				break
 			loss_history.append(loss)
 			prev_loss = loss
+			epoch += 1
 	except KeyboardInterrupt:
 		print('Quitting training early.')
 
@@ -122,11 +135,14 @@ def run(early_stop=True):
 	test_loss = test(K)
 
 	f1 = pred(K, random.randint(0, len(test_set)-1), test_set)
-	f2 = plt.figure(2)
+	f2 = plt.figure()
 	plt.plot(np.arange(len(loss_history)), loss_history)
-	f3 = plt.figure(3)
+	f3 = plt.figure()
 	K = K.detach().cpu().numpy()
 	plt.imshow(K, cmap=plt.cm.gray)
+
+	vis(X)
+
 	plt.show()
 
 if __name__ == '__main__':
