@@ -2,6 +2,9 @@ from scipy.stats import cauchy, laplace
 import torch
 import numpy as np
 
+def acos_safe(x, eps=1e-4):
+    return x.clamp(-1.0 + eps, 1.0 - eps).acos()
+
 class RFFKernel:
 	'''
 	Random Fourier features implementation of Gaussian/Laplacian kernel.
@@ -21,12 +24,16 @@ class RFFKernel:
 		elif metric == 'laplace':
 			self.w = cauchy.rvs(scale=gamma, size=(D,d))
 			self.w = torch.from_numpy(self.w).double().to(device)
+		self.w_inv = torch.pinverse(self.w)
 
 		# Sample offsets
-		self.b = 2*np.pi*torch.empty((D,), device=device).random_(0, 1)
+		self.b = 2*np.pi*torch.empty((D,), device=device, dtype=torch.double).random_(0, to=1)
 
-	def __call__(self, X):
-		return np.sqrt(2/self.D)*torch.cos((torch.matmul(X, self.w.t())) + self.b.unsqueeze(0))
+	def __call__(self, X, inv=False):
+		if inv:
+			return torch.matmul(acos_safe(X/(np.sqrt(2/self.D))) - self.b.unsqueeze(0), self.w_inv.t())
+		else:
+			return np.sqrt(2/self.D)*torch.cos(torch.matmul(X, self.w.t()) + self.b.unsqueeze(0))
 
 def gaussian_kernel(X, Y, sigma=None, der=None):
 	'''

@@ -5,19 +5,20 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 
-def block_bootstrap_example(X: np.ndarray, block_size: int):
+def block_bootstrap_example(X: np.ndarray, block_size: int, offset: int):
 	'''
 	Samples X_t by block bootstrap.
 	X: numpy tensor (m channels x n time steps)
 	block_size: size of each block
+	offset: target offset
 	'''
 	if len(X.shape) > 2:
 		# TODO
 		raise Exception('Cant process more than 1D samples')
 
 	n = X.shape[0]
-	t = random.randint(0, n-block_size-1)
-	X1, X2 = X[t:t+block_size], X[t+1:t+block_size+1]
+	t = random.randint(0, n-block_size-offset)
+	X1, X2 = X[t:t+block_size], X[t+offset:t+block_size+offset]
 	return X1, X2
 
 def delay_embed(X: np.ndarray, dt: int, d: int):
@@ -71,7 +72,7 @@ def inverse_wavelet(C_t: np.ndarray, wavelet: pywt.Wavelet):
 	return pywt.idwt2((cA, (cH, cV, cD)), wavelet, mode='smooth')
 
 class TimeSeriesDataset(Dataset):
-	def __init__(self, X: np.ndarray, coefs_fn, block_size=None, n_samples=None, device=torch.device("cpu"), normalize=False):
+	def __init__(self, X: np.ndarray, coefs_fn, offset=1, block_size=None, n_samples=None, device=torch.device("cpu"), normalize=None):
 		'''
 		Data loader for time series.
 		Uses nxm indexing convention because numpy does.
@@ -82,7 +83,7 @@ class TimeSeriesDataset(Dataset):
 		if n_samples is None:
 			n_samples = int(n / block_size)
 
-		X_t_sample, _ = block_bootstrap_example(X, block_size)
+		X_t_sample, _ = block_bootstrap_example(X, block_size, offset)
 		n_c, m_c = coefs_fn(X_t_sample).shape
 
 		self.X = X
@@ -92,14 +93,18 @@ class TimeSeriesDataset(Dataset):
 		self.samples = np.empty((n_samples, 2, block_size, m))
 		self.samples_C = np.empty((n_samples, 2, block_size, m_c))
 		for i in range(n_samples):
-			X1, X2 = block_bootstrap_example(X, block_size)
+			X1, X2 = block_bootstrap_example(X, block_size, offset)
 			C1, C2 = coefs_fn(X1), coefs_fn(X2)
 			self.samples[i][0], self.samples[i][1] = X1, X2
 			self.samples_C[i][0], self.samples_C[i][1] = C1, C2
 
 		self.normalize = normalize
-		self.norm_x = np.abs(self.samples).max()
-		self.norm_c = np.abs(self.samples_C).max()
+		if normalize is None:
+			self.norm_x = 1
+			self.norm_c = 1
+		else:
+			self.norm_x = np.abs(self.samples).max() * float(normalize)
+			self.norm_c = np.abs(self.samples_C).max() * float(normalize)
 
 	def __len__(self):
 		return self.n
