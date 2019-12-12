@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import time
 t1 = time.time() #times the computation
 
-def get_position_velocity(T=60000):
+def get_position_velocity(T=60000, show=False):
     # parameters (mass = 1)
     a = 0.5
     b = 1/16.0
@@ -80,44 +80,45 @@ def get_position_velocity(T=60000):
         position[i] = x
         velocity[i] = v
 
-    ##f = open('data_duffing_pos_vel.txt','w')
-    ##for i in range(len(t)):
-    ##    f.write('%f %f' %(position[i], velocity[i]))
-    ##f.close()
+    if show:
+        ##f = open('data_duffing_pos_vel.txt','w')
+        ##for i in range(len(t)):
+        ##    f.write('%f %f' %(position[i], velocity[i]))
+        ##f.close()
 
-    # obtain phase space points at integer multiples of the period for Poincare plot
-    strange_attractor = np.zeros([int(T/period),2])
-    k = 1
-    for i in range(len(t)):
-        if abs(t[i]-k*period)<h:
-            strange_attractor[k-1,0] = position[i]
-            strange_attractor[k-1,1] = velocity[i]
-            k+=1
+        # obtain phase space points at integer multiples of the period for Poincare plot
+        strange_attractor = np.zeros([int(T/period),2])
+        k = 1
+        for i in range(len(t)):
+            if abs(t[i]-k*period)<h:
+                strange_attractor[k-1,0] = position[i]
+                strange_attractor[k-1,1] = velocity[i]
+                k+=1
 
-    t2 = time.time()
-    print('computation takes ',t2-t1,' seconds.')
+        t2 = time.time()
+        print('computation takes ',t2-t1,' seconds.')
 
-    plt.figure()
-    plt.plot(t[-3000:],position[-3000:],'g-',linewidth=4.0)
-    plt.title('Trajectory of the oscillator',{'fontsize':24})
-    plt.xlabel('time',{'fontsize':24})
-    plt.ylabel('Position',{'fontsize':24})
-    plt.tick_params(axis='both',labelsize=24)
+        plt.figure()
+        plt.plot(t[-3000:],position[-3000:],'g-',linewidth=4.0)
+        plt.title('Trajectory of the oscillator',{'fontsize':24})
+        plt.xlabel('time',{'fontsize':24})
+        plt.ylabel('Position',{'fontsize':24})
+        plt.tick_params(axis='both',labelsize=24)
 
-    plt.figure()
-    plt.plot(position[-3000:],velocity[-3000:],'r-',linewidth=4.0)
-    plt.title('Phase space',{'fontsize':24})
-    plt.xlim([-4.5,4.5])
-    plt.xlabel('Position',{'fontsize':24})
-    plt.ylabel('Momentum',{'fontsize':24})
-    plt.tick_params(axis='both',labelsize=24)
+        plt.figure()
+        plt.plot(position[-3000:],velocity[-3000:],'r-',linewidth=4.0)
+        plt.title('Phase space',{'fontsize':24})
+        plt.xlim([-4.5,4.5])
+        plt.xlabel('Position',{'fontsize':24})
+        plt.ylabel('Momentum',{'fontsize':24})
+        plt.tick_params(axis='both',labelsize=24)
 
-    plt.figure()
-    plt.scatter(strange_attractor[:,0],strange_attractor[:,1])
-    plt.xlabel('Position',{'fontsize':24})
-    plt.ylabel('Momentum',{'fontsize':24})
-    plt.title(r'Poincare Plot (Phase space at time = $\frac{2\pi N}{\omega}$, N = 1,2,3...)',{'fontsize':24})
-    plt.tick_params(axis='both',labelsize=24)
+        plt.figure()
+        plt.scatter(strange_attractor[:,0],strange_attractor[:,1])
+        plt.xlabel('Position',{'fontsize':24})
+        plt.ylabel('Momentum',{'fontsize':24})
+        plt.title(r'Poincare Plot (Phase space at time = $\frac{2\pi N}{\omega}$, N = 1,2,3...)',{'fontsize':24})
+        plt.tick_params(axis='both',labelsize=24)
 
     # plt.show((1,2,3))
     return position, velocity

@@ -6,15 +6,11 @@ from functions import *
 
 class Model1:
 	def __init__(self, x_shape, device):
-		self.embed_dim = 100
-		self.gk = RFFKernel(x_shape[1], D=self.embed_dim, metric='rbf', device=device)
-		self.x_shape = x_shape
-		self.device = device
-		W = torch.randn(self.embed_dim, self.embed_dim).double().to(device)
+		W = torch.randn(x_shape).double().to(device)
 		self.W = Variable(W, requires_grad=True)
 
 	def pred(self, X):
-		return self.gk(torch.matmul(self.gk(X), self.W), inv=True)
+		return torch.bmm(X, self.W)
 
 	def loss(self, X0, X1):
 		return torch.pow(torch.norm(self.pred(X0) - X1, p='fro'), 2)

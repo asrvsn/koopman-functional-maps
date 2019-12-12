@@ -12,26 +12,21 @@ def block_bootstrap_example(X: np.ndarray, block_size: int, offset: int):
 	block_size: size of each block
 	offset: target offset
 	'''
-	if len(X.shape) > 2:
-		# TODO
-		raise Exception('Cant process more than 1D samples')
-
 	n = X.shape[0]
 	t = random.randint(0, n-block_size-offset)
 	X1, X2 = X[t:t+block_size], X[t+offset:t+block_size+offset]
+	X1, X2 = np.transpose(X1, (1, 0, 2)), np.transpose(X2, (1, 0, 2))
 	return X1, X2
 
-def delay_embed(X: np.ndarray, dt: int, d: int):
+def delay_embed_1d(X: np.ndarray, lag: int, d: int):
 	'''
-	Embed 1-dimensional time series into delay coordinates.
-	dt: lag time 
+	Embed time series into delay coordinates. Assumes first dimension is time.
+	lag: lag time 
 	d: embedding dimension
-	Returns d x n sample.
+	Returns d x n sample. Last dimension will be delay coordinates.
 	'''
-	if len(X.shape) > 1:
-		raise Exception('input dimension too high')
 
-	k = dt * d # need at least this much data
+	k = lag * d # need at least this much data
 	n = X.shape[0] - k
 
 	if n < 1:
@@ -39,8 +34,33 @@ def delay_embed(X: np.ndarray, dt: int, d: int):
 
 	Y = np.empty((n, d))
 	for i in range(n):
-		Y[i] = X[i:i+k:dt]
+		Y[i] = X[i:i+k:lag]
 	return Y
+
+def delay_embed_2d(X: np.ndarray, lag: int, d: int):
+	'''
+	Embed time series into delay coordinates. Assumes first dimension is time.
+	lag: lag time 
+	d: embedding dimension
+	Returns d x n sample. Last dimension will be delay coordinates.
+	'''
+
+	k = lag * d # need at least this much data
+	n = X.shape[0] - k
+
+	if n < 1:
+		raise Exception('delay time and/or embedding dimension too high for sample size')
+
+	Y = np.empty((n, 2, d))
+	for i in range(n):
+		Y[i][0] = X[i:i+k:lag][:,0]
+		Y[i][1] = X[i:i+k:lag][:,1]
+	return Y
+
+def un_embed_2d(X: np.ndarray, lag: int):
+	x1 = X[:,0,0]
+	x2 = X[:,1,0]
+	return x1, x2
 
 def coefs_fourier(X_t: np.ndarray):
 	'''
@@ -77,24 +97,23 @@ class TimeSeriesDataset(Dataset):
 		Data loader for time series.
 		Uses nxm indexing convention because numpy does.
 		'''
-		n, m = X.shape # TODO multi-dimensional samples
+		n, d, m = X.shape # TODO multi-dimensional samples
 		if block_size is None:
 			block_size = m
 		if n_samples is None:
 			n_samples = int(n / block_size)
 
 		X_t_sample, _ = block_bootstrap_example(X, block_size, offset)
-		n_c, m_c = coefs_fn(X_t_sample).shape
 
 		self.X = X
 		self.n = n_samples
 		self.device = device
 
-		self.samples = np.empty((n_samples, 2, block_size, m))
-		self.samples_C = np.empty((n_samples, 2, block_size, m_c))
+		self.samples = np.empty((n_samples, 2, d, block_size, m))
+		self.samples_C = np.empty((n_samples, 2, d, block_size, m))
 		for i in range(n_samples):
 			X1, X2 = block_bootstrap_example(X, block_size, offset)
-			C1, C2 = coefs_fn(X1), coefs_fn(X2)
+			C1, C2 = X1, X2
 			self.samples[i][0], self.samples[i][1] = X1, X2
 			self.samples_C[i][0], self.samples_C[i][1] = C1, C2
 
@@ -116,6 +135,10 @@ class TimeSeriesDataset(Dataset):
 			X /= self.norm_x
 			C /= self.norm_c
 		return X, C
+
+	@property
+	def shape(self):
+		return self.samples.shape
 
 	@property
 	def coefs_shape(self):

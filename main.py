@@ -13,14 +13,17 @@ from models import *
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # X = sinusoid(10000, 20)
-X = duffing(10000, 3, 50)
+lag = 1
+embed_dim = 10
+X = duffing(100, lag, embed_dim)
+# X = fitzhugh_nagumo(1000, lag, embed_dim)
 
 print('==> Preparing data..')
 coefs_fn = lambda X_t: coefs_wavelet(X_t, pywt.Wavelet('haar'))
 inverse_fn = lambda C_t: inverse_wavelet(C_t, pywt.Wavelet('haar'))
 
-train_set = TimeSeriesDataset(X, coefs_fn, device=device, normalize=2.0, n_samples=100, offset=5)
-test_set = TimeSeriesDataset(X, coefs_fn, device=device, normalize=2.0, n_samples=10, offset=5)
+train_set = TimeSeriesDataset(X, coefs_fn, device=device, normalize=2.0, n_samples=100, offset=3)
+test_set = TimeSeriesDataset(X, coefs_fn, device=device, normalize=2.0, n_samples=10, offset=3)
 
 c_shape = train_set.coefs_shape
 x_shape = train_set.input_shape
@@ -64,11 +67,34 @@ def test(model):
 		print(f'Test loss: {loss}')
 		return loss
 
+def vis_data(X):
+	x1, x2 = un_embed_2d(X, lag) # TODO nd
+	plt.figure()
+	plt.title('Sample')
+	plt.plot(x1, x2)
+
+def extrapolate(model, extent):
+	with torch.no_grad():
+		skip = int(len(X) / extent)
+		x = X[0]
+		shape = (extent, x.shape[0], x.shape[1])
+		trajectory = np.empty(shape)
+		trajectory[0] = x
+		for i in range(1, extent):
+			x = torch.from_numpy(X[i*skip]).unsqueeze(1).to(device)
+			x = model.pred(x)
+			trajectory[i] = x.squeeze(1).cpu().numpy()
+		x1, x2 = un_embed_2d(trajectory, lag)
+		plt.figure()
+		plt.title('Predicted horizon')
+		plt.plot(x1, x2, color='red')
+
 def run(early_stop=True):
 	print('==> Learning..')
-	model = Model3(x_shape, device)
+	print(test_set.shape)
+	model = Model1(x_shape, device)
 
-	optimizer = optim.Adam(model.params, lr=lr)
+	optimizer = optim.SGD(model.params, lr=lr, momentum=mom)
 
 	epoch = 0
 	prev_grad = 0
@@ -90,11 +116,17 @@ def run(early_stop=True):
 	print('==> Testing..')
 	test_loss = test(model)
 
-	f1 = vis(model, random.randint(0, len(test_set)-1), test_set)
+	# f1 = vis(model, random.randint(0, len(test_set)-1), test_set)
 	f2 = plt.figure()
+	plt.title(f'Convergence: {epoch} epochs')
+	plt.yscale('log')
 	plt.plot(np.arange(len(loss_history)), loss_history)
 	# f3 = plt.figure()
 	# plt.imshow(model.W.detach().cpu().numpy(), cmap=plt.cm.gray)
+
+	vis_data(X)
+
+	extrapolate(model, 200)
 
 	plt.show()
 
