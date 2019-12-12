@@ -15,8 +15,8 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 # X = sinusoid(10000, 20)
 lag = 1
 embed_dim = 10
-X = duffing(100, lag, embed_dim)
-# X = fitzhugh_nagumo(1000, lag, embed_dim)
+# X = duffing(100, lag, embed_dim)
+X = fitzhugh_nagumo(1000, lag, embed_dim)
 
 print('==> Preparing data..')
 coefs_fn = lambda X_t: coefs_wavelet(X_t, pywt.Wavelet('haar'))
@@ -126,7 +126,7 @@ def run(early_stop=True):
 
 	vis_data(X)
 
-	extrapolate(model, 200)
+	extrapolate(model, 1000)
 
 	plt.show()
 
